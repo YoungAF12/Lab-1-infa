@@ -166,11 +166,6 @@ body.dark-theme .book-content pre {
 #pdf-viewer {
     width: 100%;
     text-align: center;
-    display: none;
-}
-
-#pdf-viewer.show {
-    display: block;
 }
 
 #pdf-viewer canvas {
@@ -178,6 +173,8 @@ body.dark-theme .book-content pre {
     height: auto;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     border-radius: 5px;
+    margin: 0 auto;
+    display: block;
 }
 
 .bookmarks {
