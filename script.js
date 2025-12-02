@@ -2,23 +2,33 @@
 let pdfDoc = null;
 let currentPage = 1;
 let totalPages = 1;
+let fontSize = 16;
 
 // Устанавливаем worker для pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// Загрузка файла
-document.getElementById('file-input').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    // Загрузка файла
+    document.getElementById('file-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        if (fileExtension === 'txt') {
+            loadTxtFile(file);
+        } else if (fileExtension === 'pdf') {
+            loadPdfFile(file);
+        } else {
+            alert('Пожалуйста, выберите файл в формате .txt или .pdf');
+        }
+    });
     
-    const fileExtension = file.name.split('.').pop().toLowerCase();
-    
-    if (fileExtension === 'txt') {
-        loadTxtFile(file);
-    } else if (fileExtension === 'pdf') {
-        loadPdfFile(file);
-    } else {
-        alert('Пожалуйста, выберите файл в формате .txt или .pdf');
+    // Загрузка примера PDF при первом посещении
+    if (!localStorage.getItem('firstVisit')) {
+        // Можно добавить загрузку примера PDF или показать инструкцию
+        localStorage.setItem('firstVisit', 'true');
     }
 });
 
@@ -27,24 +37,41 @@ function loadTxtFile(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
         const content = e.target.result;
-        document.getElementById('book-content').innerHTML = '<pre>' + escapeHtml(content) + '</pre>';
-        document.getElementById('book-content').style.display = 'block';
-        document.getElementById('pdf-viewer').style.display = 'none';
-        document.getElementById('pdf-controls').style.display = 'none';
+        const bookContent = document.getElementById('book-content');
+        bookContent.innerHTML = '<pre>' + escapeHtml(content) + '</pre>';
+        bookContent.style.display = 'block';
+        bookContent.style.fontSize = fontSize + 'px';
+        
+        // Скрываем PDF viewer
+        document.getElementById('pdf-viewer').classList.remove('show');
+        document.getElementById('pdf-controls').classList.remove('show');
         
         // Подсветка синтаксиса для кода в тексте
-        document.querySelectorAll('pre code').forEach((block) => {
-            hljs.highlightElement(block);
-        });
+        setTimeout(() => {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }, 100);
+        
+        // Добавляем в закладки
+        addBookmark(file.name);
     };
     reader.readAsText(file);
 }
 
 // Загрузка PDF файла
 function loadPdfFile(file) {
-    document.getElementById('book-content').style.display = 'none';
-    document.getElementById('pdf-viewer').style.display = 'block';
-    document.getElementById('pdf-controls').style.display = 'flex';
+    const pdfViewer = document.getElementById('pdf-viewer');
+    const bookContent = document.getElementById('book-content');
+    const pdfControls = document.getElementById('pdf-controls');
+    
+    // Показываем PDF viewer, скрываем текстовый контент
+    bookContent.style.display = 'none';
+    pdfViewer.classList.add('show');
+    pdfControls.classList.add('show');
+    
+    // Показываем загрузку
+    pdfViewer.innerHTML = '<p>Загрузка PDF...</p>';
     
     const fileReader = new FileReader();
     fileReader.onload = function() {
@@ -53,16 +80,25 @@ function loadPdfFile(file) {
         pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
             pdfDoc = pdf;
             totalPages = pdf.numPages;
+            currentPage = 1;
             
             // Обновляем элементы управления
-            document.getElementById('page-slider').max = totalPages;
+            const pageSlider = document.getElementById('page-slider');
+            pageSlider.max = totalPages;
+            pageSlider.value = 1;
+            
             updatePageInfo();
             
             // Загружаем первую страницу
             renderPage(currentPage);
+            
+            // Добавляем в закладки
+            addBookmark(file.name + ' (стр. 1)');
+            
         }).catch(function(error) {
             console.error('Ошибка при загрузке PDF:', error);
-            alert('Ошибка при загрузке PDF файла');
+            pdfViewer.innerHTML = '<p style="color: red;">Ошибка при загрузке PDF файла</p>';
+            alert('Ошибка при загрузке PDF файла. Убедитесь, что файл не поврежден.');
         });
     };
     fileReader.readAsArrayBuffer(file);
@@ -73,7 +109,7 @@ function renderPage(pageNum) {
     if (!pdfDoc) return;
     
     pdfDoc.getPage(pageNum).then(function(page) {
-        const scale = 1.5;
+        const scale = 1.8;
         const viewport = page.getViewport({ scale: scale });
         
         const canvas = document.createElement('canvas');
@@ -94,9 +130,19 @@ function renderPage(pageNum) {
             // Центрируем canvas
             canvas.style.margin = '0 auto';
             canvas.style.display = 'block';
+            canvas.style.maxWidth = '100%';
             
             updatePageInfo();
+            
+            // Добавляем закладку для текущей страницы
+            const currentFile = document.getElementById('file-input').files[0];
+            if (currentFile) {
+                updateCurrentBookmark(currentFile.name + ' (стр. ' + pageNum + ')');
+            }
         });
+    }).catch(function(error) {
+        console.error('Ошибка при рендеринге страницы:', error);
+        document.getElementById('pdf-viewer').innerHTML = '<p style="color: red;">Ошибка при отображении страницы</p>';
     });
 }
 
@@ -136,26 +182,90 @@ function escapeHtml(text) {
 // Тема
 function toggleTheme() {
     document.body.classList.toggle('dark-theme');
+    const isDark = document.body.classList.contains('dark-theme');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}
+
+// Загрузка темы из localStorage
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-theme');
+    }
 }
 
 // Размер шрифта
-let fontSize = 16;
 function increaseFont() {
     fontSize += 1;
     document.getElementById('book-content').style.fontSize = fontSize + 'px';
+    localStorage.setItem('fontSize', fontSize);
 }
 
 function decreaseFont() {
     if (fontSize > 12) {
         fontSize -= 1;
         document.getElementById('book-content').style.fontSize = fontSize + 'px';
+        localStorage.setItem('fontSize', fontSize);
+    }
+}
+
+// Загрузка размера шрифта из localStorage
+function loadFontSize() {
+    const savedSize = localStorage.getItem('fontSize');
+    if (savedSize) {
+        fontSize = parseInt(savedSize);
+        document.getElementById('book-content').style.fontSize = fontSize + 'px';
     }
 }
 
 // Добавление закладок
-function addBookmark() {
+function addBookmark(name) {
     const bookmarksList = document.getElementById('bookmarks-list');
     const bookmark = document.createElement('li');
-    bookmark.textContent = `Закладка ${bookmarksList.children.length + 1}`;
+    bookmark.textContent = name;
+    bookmark.onclick = function() {
+        alert('Закладка: ' + name);
+    };
     bookmarksList.appendChild(bookmark);
+    
+    // Сохраняем закладки
+    saveBookmarks();
 }
+
+function updateCurrentBookmark(name) {
+    const bookmarksList = document.getElementById('bookmarks-list');
+    const items = bookmarksList.getElementsByTagName('li');
+    if (items.length > 0) {
+        items[items.length - 1].textContent = name;
+        saveBookmarks();
+    }
+}
+
+function saveBookmarks() {
+    const bookmarksList = document.getElementById('bookmarks-list');
+    const bookmarks = [];
+    Array.from(bookmarksList.children).forEach(li => {
+        bookmarks.push(li.textContent);
+    });
+    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+}
+
+function loadBookmarks() {
+    const savedBookmarks = localStorage.getItem('bookmarks');
+    if (savedBookmarks) {
+        const bookmarks = JSON.parse(savedBookmarks);
+        bookmarks.forEach(name => {
+            const bookmark = document.createElement('li');
+            bookmark.textContent = name;
+            bookmark.onclick = function() {
+                alert('Закладка: ' + name);
+            };
+            document.getElementById('bookmarks-list').appendChild(bookmark);
+        });
+    }
+}
+
+// Инициализация при загрузке
+loadTheme();
+loadFontSize();
+loadBookmarks();
