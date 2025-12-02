@@ -24,12 +24,6 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Пожалуйста, выберите файл в формате .txt или .pdf');
         }
     });
-    
-    // Загрузка примера PDF при первом посещении
-    if (!localStorage.getItem('firstVisit')) {
-        // Можно добавить загрузку примера PDF или показать инструкцию
-        localStorage.setItem('firstVisit', 'true');
-    }
 });
 
 // Загрузка текстового файла
@@ -43,8 +37,8 @@ function loadTxtFile(file) {
         bookContent.style.fontSize = fontSize + 'px';
         
         // Скрываем PDF viewer
-        document.getElementById('pdf-viewer').classList.remove('show');
-        document.getElementById('pdf-controls').classList.remove('show');
+        document.getElementById('pdf-viewer').style.display = 'none';
+        document.getElementById('pdf-controls').style.display = 'none';
         
         // Подсветка синтаксиса для кода в тексте
         setTimeout(() => {
@@ -67,8 +61,8 @@ function loadPdfFile(file) {
     
     // Показываем PDF viewer, скрываем текстовый контент
     bookContent.style.display = 'none';
-    pdfViewer.classList.add('show');
-    pdfControls.classList.add('show');
+    pdfViewer.style.display = 'block';
+    pdfControls.style.display = 'flex';
     
     // Показываем загрузку
     pdfViewer.innerHTML = '<p>Загрузка PDF...</p>';
@@ -126,11 +120,6 @@ function renderPage(pageNum) {
             const pdfViewer = document.getElementById('pdf-viewer');
             pdfViewer.innerHTML = '';
             pdfViewer.appendChild(canvas);
-            
-            // Центрируем canvas
-            canvas.style.margin = '0 auto';
-            canvas.style.display = 'block';
-            canvas.style.maxWidth = '100%';
             
             updatePageInfo();
             
@@ -227,9 +216,6 @@ function addBookmark(name) {
         alert('Закладка: ' + name);
     };
     bookmarksList.appendChild(bookmark);
-    
-    // Сохраняем закладки
-    saveBookmarks();
 }
 
 function updateCurrentBookmark(name) {
@@ -237,35 +223,9 @@ function updateCurrentBookmark(name) {
     const items = bookmarksList.getElementsByTagName('li');
     if (items.length > 0) {
         items[items.length - 1].textContent = name;
-        saveBookmarks();
-    }
-}
-
-function saveBookmarks() {
-    const bookmarksList = document.getElementById('bookmarks-list');
-    const bookmarks = [];
-    Array.from(bookmarksList.children).forEach(li => {
-        bookmarks.push(li.textContent);
-    });
-    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
-}
-
-function loadBookmarks() {
-    const savedBookmarks = localStorage.getItem('bookmarks');
-    if (savedBookmarks) {
-        const bookmarks = JSON.parse(savedBookmarks);
-        bookmarks.forEach(name => {
-            const bookmark = document.createElement('li');
-            bookmark.textContent = name;
-            bookmark.onclick = function() {
-                alert('Закладка: ' + name);
-            };
-            document.getElementById('bookmarks-list').appendChild(bookmark);
-        });
     }
 }
 
 // Инициализация при загрузке
 loadTheme();
 loadFontSize();
-loadBookmarks();
